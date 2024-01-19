@@ -1,5 +1,5 @@
 # Simple HTTP server
-\# Multithreaded http server
+\# Multithreaded http server \# 0 Dependencies
 
 Once you have rust installed `cargo run`
 

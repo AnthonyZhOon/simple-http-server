@@ -24,7 +24,7 @@ fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
     let request_line = match buf_reader.lines().next() {
         Some(x) => x.expect("Failed to create buffer"),
-        None => "Bad Request".to_string()
+        None => "".to_string()
     };
 
     let (status_line, filename) = match &request_line[..] {
@@ -33,7 +33,7 @@ fn handle_connection(mut stream: TcpStream) {
             thread::sleep(Duration::from_secs(5));
             ("HTTP/1.1 200 OK", "hello.html")
         }
-        "Bad Request" => ("HTTP/1.1 400 BAD REQUEST", "400.html"),
+        "" => ("HTTP/1.1 400 BAD REQUEST", "400.html"),
         _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
 
     };

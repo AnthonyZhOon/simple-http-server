@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     sync::{mpsc, Arc, Mutex},
     thread,
 };
@@ -18,15 +19,21 @@ impl ThreadPool {
     /// # Panics
     ///
     /// The `new` function will panic if the size is zero.
-    pub fn new(size: usize) -> ThreadPool {
+    pub fn new(size: usize, tries: usize) -> ThreadPool {
         assert!(size > 0);
 
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
         let mut workers = Vec::with_capacity(size);
 
-        for id in 0..size {
-            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        'outer: for id in 0..size {
+            for _ in 0..tries {
+                if let Ok(worker) = Worker::new(id, Arc::clone(&receiver)) {
+                    workers.push(worker);
+                    continue 'outer;
+                }
+            }
+            panic!("Could not create thread after retrying");
         }
         ThreadPool {
             workers,
@@ -63,11 +70,27 @@ struct Worker {
     thread: Option<thread::JoinHandle<()>>,
 }
 
+#[derive(Debug)]
+pub struct ThreadSpawnError {
+    id: usize,
+}
+
+impl Error for ThreadSpawnError {}
+
+impl std::fmt::Display for ThreadSpawnError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OS failed to spawn thread for worker {}", self.id)
+    }
+}
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || loop {
+    fn new(
+        id: usize,
+        receiver: Arc<Mutex<mpsc::Receiver<Job>>>,
+    ) -> Result<Worker, ThreadSpawnError> {
+        let builder = thread::Builder::new();
+        match builder.spawn(move || loop {
             let message = receiver.lock().unwrap().recv();
-            
+
             match message {
                 Ok(job) => {
                     println!("Worker {id} got a job; executing.");
@@ -79,11 +102,12 @@ impl Worker {
                     break;
                 }
             }
-        });
-
-        Worker {
-            id,
-            thread: Some(thread),
+        }) {
+            Ok(thread) => Ok(Worker {
+                id,
+                thread: Some(thread),
+            }),
+            Err(_) => Err(ThreadSpawnError { id }),
         }
     }
 }

@@ -4,11 +4,13 @@ use std::{
     net::{TcpListener, TcpStream},
     thread,
     time::Duration,
+    
+    
 };
 use http_server::ThreadPool;
 
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").expect("Failed to connect");
+    let listener = TcpListener::bind("192.168.1.107:7878").expect("Failed to connect");
     let pool = ThreadPool::new(4, 5);
 
     for stream in listener.incoming() {
@@ -26,9 +28,11 @@ fn handle_connection(mut stream: TcpStream) {
         Some(x) => x.expect("Failed to create buffer"),
         None => "".to_string()
     };
-
+    // todo!("Make a helper function for checking the request line, return the req, path, args, HTTP ver");
+    //  I know regex is the best choice for matching request_line but I want to implement from scratch
     let (status_line, filename) = match &request_line[..] {
         "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
+        "GET /cat.jpg HTTP/1.1" => ("HTTP/1.1 200 OK", "cat.jpg"),
         "GET /sleep HTTP/1.1" => {
             thread::sleep(Duration::from_secs(5));
             ("HTTP/1.1 200 OK", "hello.html")
@@ -38,10 +42,11 @@ fn handle_connection(mut stream: TcpStream) {
 
     };
 
-    let contents = fs::read_to_string(filename).unwrap();
+    let contents = fs::read(filename).unwrap();
     let length = contents.len();
-    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n");
 
     stream.write_all(response.as_bytes()).unwrap();
+    stream.write_all(&contents).unwrap();
     stream.flush().unwrap();
 }

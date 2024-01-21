@@ -25,7 +25,9 @@ fn main() {
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
     let request_line = match buf_reader.lines().next() {
-        Some(x) => x.expect("Failed to create buffer"),
+        Some(x) => x.unwrap_or_else(|err| {println!("{:#?}", err);
+        "".to_string()
+    }),
         None => "".to_string()
     };
     // todo!("Make a helper function for checking the request line, return the req, path, args, HTTP ver");
@@ -36,10 +38,10 @@ fn handle_connection(mut stream: TcpStream) {
         "GET /cat.jpg HTTP/1.1" => ("HTTP/1.1 200 OK", "cat.jpg"),
         "GET /CV.pdf HTTP/1.1" => ("HTTP/1.1 200 OK", "CV.pdf"),
         "GET /icon.png HTTP/1.1" => ("HTTP/1.1 200 OK", "icon.png"),
-        "GET /sleep HTTP/1.1" => {
-            thread::sleep(Duration::from_secs(5));
-            ("HTTP/1.1 200 OK", "hello.html")
-        }
+        // "GET /sleep HTTP/1.1" => {
+        //     thread::sleep(Duration::from_secs(5));
+        //     ("HTTP/1.1 200 OK", "hello.html")
+        // }
         "" => ("HTTP/1.1 400 BAD REQUEST", "400.html"),
         _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
 

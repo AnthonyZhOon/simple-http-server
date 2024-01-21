@@ -16,3 +16,5 @@ Also you can test the multithreaded ability with the 127.0.0.1:7878/sleep URL, t
 - Fun?
 - Use some APIs to fetch cool info?
 - Use this to store my reading list :fire:
+- Create daily logs, storing a week to month of data?
+- Use types and regex to decompose HTTP requests

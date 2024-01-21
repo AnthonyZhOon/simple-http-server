@@ -33,6 +33,8 @@ fn handle_connection(mut stream: TcpStream) {
     let (status_line, filename) = match &request_line[..] {
         "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
         "GET /cat.jpg HTTP/1.1" => ("HTTP/1.1 200 OK", "cat.jpg"),
+        "GET /sipp.pdf HTTP/1.1" => ("HTTP/1.1 200 OK", "sipp.pdf"),
+        "GET /icon.png HTTP/1.1" => ("HTTP/1.1 200 OK", "icon.png"),
         "GET /sleep HTTP/1.1" => {
             thread::sleep(Duration::from_secs(5));
             ("HTTP/1.1 200 OK", "hello.html")

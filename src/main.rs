@@ -10,7 +10,7 @@ use std::{
 use http_server::ThreadPool;
 
 fn main() {
-    let listener = TcpListener::bind("192.168.1.107:7878").expect("Failed to connect");
+    let listener = TcpListener::bind("192.168.1.107:8008").expect("Failed to connect");
     let pool = ThreadPool::new(4, 5);
 
     for stream in listener.incoming() {
@@ -30,10 +30,11 @@ fn handle_connection(mut stream: TcpStream) {
     };
     // todo!("Make a helper function for checking the request line, return the req, path, args, HTTP ver");
     //  I know regex is the best choice for matching request_line but I want to implement from scratch
+    // Log the client IP?
     let (status_line, filename) = match &request_line[..] {
         "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
         "GET /cat.jpg HTTP/1.1" => ("HTTP/1.1 200 OK", "cat.jpg"),
-        "GET /sipp.pdf HTTP/1.1" => ("HTTP/1.1 200 OK", "sipp.pdf"),
+        "GET /CV.pdf HTTP/1.1" => ("HTTP/1.1 200 OK", "CV.pdf"),
         "GET /icon.png HTTP/1.1" => ("HTTP/1.1 200 OK", "icon.png"),
         "GET /sleep HTTP/1.1" => {
             thread::sleep(Duration::from_secs(5));

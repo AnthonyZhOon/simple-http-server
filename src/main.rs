@@ -122,11 +122,6 @@ fn handle_connection(mut stream: TcpStream) {
             Err(x) => format!("Could not determine peer address: {x}"),
         }
     );
-    // Prevent going up the directories
-    if path.contains("..") {
-        send_response(ResponseStatus::Bad404, stream);
-        return
-    }
 
     match request_type {
         RequestType::GET => send_response(ResponseStatus::Ok200(path), stream),
@@ -142,13 +137,35 @@ fn send_response(response_status: ResponseStatus, mut stream: TcpStream) {
     let status_line = format!("{response_status}\r\n");
     let filename = match response_status {
         ResponseStatus::Ok200("/") => "index.html",
-        ResponseStatus::Ok200(path) => path,
+        ResponseStatus::Ok200(path) => path.get(1..).unwrap(),
         ResponseStatus::Bad400 => "400.html",
         ResponseStatus::Bad404 => "404.html",
         ResponseStatus::Fail500 => "500.html",
     };
 
-    let contents = match fs::read(Path::new(&format!("./contents/{filename}")).components()) {
+    if filename.contains("..") {
+        send_response(ResponseStatus::Bad404, stream);
+        return;
+    }
+    match fs::read_dir("contents/") {
+        Ok(dir) => {
+            if !dir
+                .filter_map(|x| if x.is_ok() { Some(x.unwrap()) } else { None })
+                .any(|entry| entry.path().ends_with(filename))
+            {
+                eprintln!("Attempted to access illegal file {filename}");
+                send_response(ResponseStatus::Bad404, stream);
+                return
+            }
+        }
+        Err(e) => {
+            eprintln!("contents/ not found: {e}");
+            send_response(ResponseStatus::Bad404, stream);
+            return;
+        }
+    }
+
+    let contents = match fs::read(Path::new(&format!("./contents/{filename}"))) {
         Ok(x) => x,
         Err(e) => match e.kind() {
             NotFound => {

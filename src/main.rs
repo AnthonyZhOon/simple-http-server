@@ -1,57 +1,123 @@
+use ::http_server::{RequestType, ResponseStatus, ThreadPool};
 use std::{
     fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
-    thread,
-    time::Duration,
-    
-    
+    path::Path,
 };
-use http_server::ThreadPool;
-
 fn main() {
     let listener = TcpListener::bind("192.168.1.107:8008").expect("Failed to connect");
     let pool = ThreadPool::new(4, 5);
 
     for stream in listener.incoming() {
-        let stream = stream.unwrap();
+        let stream = match stream {
+            Ok(stream) => stream,
+            Err(x) => {eprintln!("Failed to receive: {x}"); continue;}
+        };
 
         pool.execute(|| handle_connection(stream));
     }
-
     println!("Shutting down.");
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let buf_reader = BufReader::new(&mut stream);
-    let request_line = match buf_reader.lines().next() {
-        Some(x) => x.unwrap_or_else(|err| {println!("{:#?}", err);
-        "".to_string()
-    }),
-        None => "".to_string()
-    };
-    // todo!("Make a helper function for checking the request line, return the req, path, args, HTTP ver");
-    //  I know regex is the best choice for matching request_line but I want to implement from scratch
-    // Log the client IP?
-    let (status_line, filename) = match &request_line[..] {
-        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
-        "GET /cat.jpg HTTP/1.1" => ("HTTP/1.1 200 OK", "cat.jpg"),
-        "GET /CV.pdf HTTP/1.1" => ("HTTP/1.1 200 OK", "CV.pdf"),
-        "GET /icon.png HTTP/1.1" => ("HTTP/1.1 200 OK", "icon.png"),
-        // "GET /sleep HTTP/1.1" => {
-        //     thread::sleep(Duration::from_secs(5));
-        //     ("HTTP/1.1 200 OK", "hello.html")
-        // }
-        "" => ("HTTP/1.1 400 BAD REQUEST", "400.html"),
-        _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
+    let mut buf_reader = BufReader::new(&mut stream).lines();
 
+    let request_line = match buf_reader.next() {
+        Some(Ok(x)) => x,
+        Some(Err(x)) => {
+            eprintln!("Failed to read from stream, {x}");
+            return;
+        }
+        None => "".to_string(),
     };
 
-    let contents = fs::read(filename).unwrap();
+    let mut request_buf = request_line.split_ascii_whitespace();
+
+    let request_type = match request_buf.next() {
+        Some("GET") => RequestType::GET,
+        None => {
+            send_response(ResponseStatus::Fail500, stream);
+            return;
+        }
+        Some(x) => {
+            eprintln!("Not implemented {x} requests yet");
+            send_response(ResponseStatus::Bad400, stream);
+            return;
+        } // Not Implemented this kind
+    };
+
+    // TODO: Extend this to include query and parameters
+    let path = match request_buf.next() {
+        Some(path) => path,
+        None => {
+            eprintln!("No path given");
+            send_response(ResponseStatus::Bad400, stream);
+            return;
+        }
+    };
+
+    let http_ver = match request_buf.next() {
+        Some(ver) => ver,
+        None => {
+            eprintln!("No HTTP ver given");
+            send_response(ResponseStatus::Bad400, stream);
+            return;
+        }
+    };
+
+    // let header: String = buf_reader
+    //     .take_while(|line| line.is_ok())
+    //     .map(|x| x.unwrap())
+    //     .take_while(|x| !x.is_empty())
+    //     .collect();
+    eprintln!("{request_type} {path} {http_ver} from: {}", match stream.peer_addr() {
+        Ok(x) => x.to_string(),
+        Err(x) => format!("Could not determine peer address: {x}"),
+    });
+    assert!(path.starts_with("/"));
+
+    match request_type {
+        RequestType::GET => send_response(ResponseStatus::Ok200(path), stream),
+        _ => {
+            eprintln!("Not implemented {request_type} requests yet");
+            send_response(ResponseStatus::Fail500, stream)
+        } // Not Implemented this kind
+    }
+}
+
+#[inline]
+fn send_response(response_status: ResponseStatus, mut stream: TcpStream) {
+    let status_line = format!("{response_status}\r\n");
+    let filename = match response_status {
+        ResponseStatus::Ok200("/") => "index.html",
+        ResponseStatus::Ok200(path) => path,
+        ResponseStatus::Bad400 => "400.html",
+        ResponseStatus::Bad404 => "404.html",
+        ResponseStatus::Fail500 => "500.html",
+    };
+
+    let contents = fs::read(Path::new(&format!("./contents/{filename}"))).unwrap();
+
     let length = contents.len();
-    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n");
+    let response = format!("{status_line}Content-Length: {length}\r\n\r\n");
 
-    stream.write_all(response.as_bytes()).unwrap();
-    stream.write_all(&contents).unwrap();
-    stream.flush().unwrap();
+    match stream.write_all(response.as_bytes()) {
+        Ok(()) => (),
+        Err(x) => {
+            println!("Failed to send response {x}");
+            return;
+        }
+    }
+    match stream.write_all(&contents) {
+        Ok(()) => (),
+        Err(x) => {
+            println!("Failed to send contents {x}");
+            return;
+        }
+    }
+    match stream.flush() {
+        Ok(()) => (),
+        Err(e) => println!("Failed to send all bytes: {e}"),
+    }
 }

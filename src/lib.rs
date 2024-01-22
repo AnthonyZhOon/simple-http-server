@@ -9,6 +9,53 @@ pub struct ThreadPool {
     sender: Option<mpsc::Sender<Job>>,
 }
 
+
+pub enum RequestType {
+    GET,
+    POST,
+    HEAD,
+    PUT,
+    DELETE,
+    CONNECT,
+    OPTIONS,
+    TRACE,
+    PATCH,
+}
+
+impl std::fmt::Display for RequestType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let x = match self {
+            Self::GET => "GET",
+            Self::POST => "POST",
+            Self::HEAD => "HEAD",
+            Self::PUT => "PUT",
+            Self::DELETE => "DELETE",
+            Self::CONNECT => "CONNECT",
+            Self::OPTIONS => "OPTIONS",
+            Self::TRACE => "TRACE",
+            Self::PATCH => "PATCH",
+        };
+        write!(f, "{x}")
+    }
+}
+pub enum ResponseStatus<'a> {
+    Ok200(&'a str),
+    Bad400,
+    Bad404,
+    Fail500
+}
+impl<'a> std::fmt::Display for ResponseStatus<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let x = match self {
+            Self::Ok200(_) => "HTTP/1.1 200 OK",
+            Self::Bad404 => "HTTP/1.1 404 NOT FOUND",
+            Self::Bad400 => "HTTP/1.1 400 BAD REQUEST",
+            Self::Fail500 => "HTTP/1.1 500 INTERNAL SERVER ERROR"
+        };
+        write!(f, "{x}")
+    }
+}
+
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 impl ThreadPool {
@@ -47,7 +94,7 @@ impl ThreadPool {
     {
         let job = Box::new(f);
 
-        self.sender.as_ref().unwrap().send(job).unwrap();
+        self.sender.as_ref().unwrap().send(job).unwrap(); // Does not fail as the corresponding sender always exists until server shutdown, we know receiver will outlive sender
     }
 }
 
@@ -59,7 +106,7 @@ impl Drop for ThreadPool {
             println!("Shutting down worker {}", worker.id);
 
             if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
+                thread.join().expect(format!("Couldn't join thread for worker {}", worker.id).as_ref());
             }
         }
     }
@@ -93,12 +140,12 @@ impl Worker {
 
             match message {
                 Ok(job) => {
-                    println!("Worker {id} got a job; executing.");
+                    eprint!("Worker {id} got a job; executing. ");
 
                     job();
                 }
                 Err(_) => {
-                    println!("Worker {id} disconnected; shutting donw.");
+                    eprintln!("Worker {id} disconnected; shutting donw.");
                     break;
                 }
             }

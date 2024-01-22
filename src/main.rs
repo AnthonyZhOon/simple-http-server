@@ -1,18 +1,67 @@
 use ::http_server::{RequestType, ResponseStatus, ThreadPool};
 use std::{
+    env::args,
     fs,
-    io::{prelude::*, BufReader},
+    io::{prelude::*, BufReader, ErrorKind::NotFound},
     net::{TcpListener, TcpStream},
     path::Path,
 };
+
+fn help() {
+    println!("-h | --help: Displays help\n--hostname: Input a hostname/ip address, default is 127.0.0.1 (localhost)\n--port: Specify the port to connect to, default is 8080")
+}
 fn main() {
-    let listener = TcpListener::bind("192.168.1.107:8008").expect("Failed to connect");
+    let mut hostname = "127.0.0.1".to_string();
+    let mut port = "8080".to_string();
+
+    let mut args = args().skip(1);
+    while let Some(arg) = args.next() {
+        match &arg[..] {
+            "-h" | "--help" => help(),
+            "--version" => {
+                println!("{} {}", "simple-http-server", "VERSION");
+            }
+            "-q" | "--quiet" => {
+                println!("Quiet mode is not supported yet.");
+            }
+            "-v" | "--verbose" => {
+                println!("Verbose mode is not supported yet.");
+            }
+            "--hostname" => {
+                if let Some(ip) = args.next() {
+                    hostname = ip;
+                } else {
+                    panic!("No value specified for parameter --hostname.");
+                }
+            }
+            "--port" => {
+                if let Some(p) = args.next() {
+                    port = p;
+                } else {
+                    panic!("No value specified for parameter --port.");
+                }
+            }
+            _ => {
+                if arg.starts_with('-') {
+                    println!("Unkown argument {}", arg);
+                } else {
+                    println!("Unkown positional argument {}", arg);
+                }
+            }
+        }
+    }
+
+    let listener = TcpListener::bind(format!("{hostname}:{port}")).expect("Failed to connect");
+    eprintln!("Locally connected to {}", listener.local_addr().unwrap());
     let pool = ThreadPool::new(4, 5);
 
     for stream in listener.incoming() {
         let stream = match stream {
             Ok(stream) => stream,
-            Err(x) => {eprintln!("Failed to receive: {x}"); continue;}
+            Err(x) => {
+                eprintln!("Failed to receive: {x}");
+                continue;
+            }
         };
 
         pool.execute(|| handle_connection(stream));
@@ -66,16 +115,18 @@ fn handle_connection(mut stream: TcpStream) {
         }
     };
 
-    // let header: String = buf_reader
-    //     .take_while(|line| line.is_ok())
-    //     .map(|x| x.unwrap())
-    //     .take_while(|x| !x.is_empty())
-    //     .collect();
-    eprintln!("{request_type} {path} {http_ver} from: {}", match stream.peer_addr() {
-        Ok(x) => x.to_string(),
-        Err(x) => format!("Could not determine peer address: {x}"),
-    });
-    assert!(path.starts_with("/"));
+    eprintln!(
+        "{request_type} {path} {http_ver} from: {}",
+        match stream.peer_addr() {
+            Ok(x) => x.to_string(),
+            Err(x) => format!("Could not determine peer address: {x}"),
+        }
+    );
+    // Prevent going up the directories
+    if path.contains("..") {
+        send_response(ResponseStatus::Bad404, stream);
+        return
+    }
 
     match request_type {
         RequestType::GET => send_response(ResponseStatus::Ok200(path), stream),
@@ -97,7 +148,19 @@ fn send_response(response_status: ResponseStatus, mut stream: TcpStream) {
         ResponseStatus::Fail500 => "500.html",
     };
 
-    let contents = fs::read(Path::new(&format!("./contents/{filename}"))).unwrap();
+    let contents = match fs::read(Path::new(&format!("./contents/{filename}")).components()) {
+        Ok(x) => x,
+        Err(e) => match e.kind() {
+            NotFound => {
+                send_response(ResponseStatus::Bad404, stream);
+                return;
+            }
+            _ => {
+                send_response(ResponseStatus::Bad400, stream);
+                return;
+            }
+        },
+    };
 
     let length = contents.len();
     let response = format!("{status_line}Content-Length: {length}\r\n\r\n");

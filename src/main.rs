@@ -143,7 +143,8 @@ fn send_response(response_status: ResponseStatus, mut stream: TcpStream) {
         ResponseStatus::Fail500 => "500.html",
     };
 
-    if filename.contains("..") {
+    if filename.contains("..") { 
+        eprintln!("Attemped bad request trying to navigate up filesystem");
         send_response(ResponseStatus::Bad404, stream);
         return;
     }

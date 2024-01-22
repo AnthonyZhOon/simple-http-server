@@ -1,4 +1,6 @@
 /target
 target/
 
-CV.pdf
+debug/
+release/
+contents/

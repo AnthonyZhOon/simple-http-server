@@ -2,6 +2,7 @@ use std::{
     error::Error,
     sync::{mpsc, Arc, Mutex},
     thread,
+    process::Command,
 };
 
 pub struct ThreadPool {
@@ -137,7 +138,7 @@ impl Worker {
         let builder = thread::Builder::new();
         match builder.spawn(move || loop {
             let message = receiver.lock().unwrap().recv();
-
+            
             match message {
                 Ok(job) => {
                     eprint!("Worker {id} got a job; executing. ");

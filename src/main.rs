@@ -52,7 +52,7 @@ fn main() {
     }
 
     let listener = TcpListener::bind(format!("{hostname}:{port}")).expect("Failed to connect");
-    eprintln!("Locally connected to {}", listener.local_addr().unwrap());
+    eprintln!("Listening to {}", listener.local_addr().unwrap());
     let pool = ThreadPool::new(4, 5);
 
     for stream in listener.incoming() {

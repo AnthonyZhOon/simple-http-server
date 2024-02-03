@@ -12,6 +12,7 @@ Feel free to modify hello.html to serve whatever
 Us
 
 # Roadmap
+- Write the HTML in Rust to serve dynamic content? I'll try looking behind the html! macro
 - Host a webpage on this in a Docker instance on as Raspberri Pi at home
 - Put my resume pdf somewhere there
 - Fun?
